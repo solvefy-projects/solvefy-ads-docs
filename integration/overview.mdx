@@ -1,0 +1,83 @@
+---
+title: "Visão geral do fluxo"
+description: "O fluxo de embed em duas etapas: backend pede token, browser carrega iframe."
+---
+
+## As duas etapas
+
+A integração tem **dois movimentos** distintos:
+
+| Etapa | Onde roda | O que faz |
+|---|---|---|
+| **1. Issue** | Backend do parceiro → Backend Solvefy | Troca a API key (segredo) por um embed token de 2 min vinculado a um usuário específico. |
+| **2. Exchange** | Browser do usuário (iframe) → Backend Solvefy | Troca o embed token por um par `accessToken`+`refreshToken` normal e abre o produto. |
+
+A separação garante que **a API key nunca toca o browser** — quem entra no
+iframe é só o token efêmero.
+
+## Quem roda o que
+
+<CardGroup cols={2}>
+  <Card title="Server-side" icon="server" href="/integration/server-side">
+    Como o seu backend pede o embed token (`POST /v1/embed/token`).
+  </Card>
+  <Card title="Browser-side" icon="window" href="/integration/iframe">
+    Como o seu frontend renderiza o iframe e o que acontece dentro dele.
+  </Card>
+</CardGroup>
+
+## Auto-provisioning
+
+Na **primeira chamada** com um `externalUserId` novo, o Solvefy cria um User
+internamente e o vincula ao seu Partner. **Chamadas subsequentes** com o mesmo
+`externalUserId` reusam o mesmo User.
+
+Implicações:
+
+- Você **não precisa** chamar nenhum endpoint de cadastro antes.
+- O `externalUserId` é o id estável do usuário no **seu** sistema. Use o
+  mesmo valor sempre — se mudar, o Solvefy vai criar um User novo.
+- O `email` e `name` do payload são gravados na primeira chamada. Atualizações
+  posteriores não mudam o User existente (no MVP atual).
+
+<Note>
+  O User auto-provisionado **não tem senha** — ele só pode entrar pelo fluxo
+  embed do parceiro que o criou. Não há vazamento entre parceiros.
+</Note>
+
+## O que o usuário vê
+
+Ao abrir o iframe pela primeira vez:
+
+1. Tela de loading rápida ("Autenticando…")
+2. Redireciona pra `/overview?embed=1`
+3. Sidebar com brand do parceiro + nav (Overview, Campanhas)
+4. Conteúdo do produto
+
+Em navegações internas (clica em Campanhas dentro do iframe), o modo embed é
+preservado via `sessionStorage` — não some se o usuário clicar em links
+internos do produto.
+
+## Tempo de vida dos tokens
+
+| Token | TTL | Onde mora |
+|---|---|---|
+| **Embed token** | 2 minutos | Apenas em trânsito (URL do iframe). Single-use. |
+| **Access token** | 15 minutos | `localStorage` do iframe. Renovado automaticamente. |
+| **Refresh token** | 7 dias | `localStorage` do iframe. Sessão silenciosamente prolongada. |
+| **API key (parceiro)** | Não expira | Cofre de segredos do **seu** backend. |
+
+Quando o usuário fecha a aba do parceiro, o `localStorage` do iframe persiste
+naquele browser. Próxima vez que ele abrir, se o `refreshToken` ainda for
+válido, **não precisa** de novo embed token. Quando expirar, volte ao passo 1.
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Server-side" icon="server" href="/integration/server-side">
+    Detalhes da chamada de issue.
+  </Card>
+  <Card title="Exemplo end-to-end" icon="code" href="/integration/full-example">
+    Veja um exemplo completo de produto integrado.
+  </Card>
+</CardGroup>

@@ -1,0 +1,59 @@
+---
+title: "Brand do parceiro"
+description: "Como o nome do seu produto aparece dentro do iframe."
+---
+
+## O que é customizável hoje
+
+Quando o iframe está em modo embed (`?embed=1` na URL), o `brandName` do
+parceiro substitui "Solvefy Ads" em três lugares visíveis:
+
+| Lugar | Antes | Depois (brand = "Food Ads") |
+|---|---|---|
+| Cabeçalho do sidebar | "Solvefy Ads" (com "Ads" amarelo) | "Food Ads" |
+| Título do conteúdo (Overview) | "Solvefy Ads — Overview" | "Food Ads — Overview" |
+| Título da aba do browser | "Solvefy Ads" | "Food Ads" |
+
+Acesso direto ao produto (`https://solvefyads.netlify.app` sem `?embed=1`) **continua
+mostrando "Solvefy Ads"** intacto. A customização só vale dentro do iframe.
+
+## Como configurar
+
+Por enquanto a configuração é feita pela equipe Solvefy quando você é
+provisionado. Envie por email:
+
+- O brand que deve aparecer (ex: `"Food Ads"`)
+- Confirmação de que ele substitui "Solvefy Ads" em todos os lugares listados
+  acima
+
+Se você não pedir um brand, o iframe mantém "Solvefy Ads" como padrão.
+
+<Note>
+  Self-service de brand (você editar via dashboard) está no roadmap mas ainda
+  não disponível. Por ora, mudanças passam pelo nosso suporte.
+</Note>
+
+## O que **não** é customizável (ainda)
+
+| Item | Status |
+|---|---|
+| Logo (imagem) | Não. Por enquanto só texto. |
+| Cores primárias do produto | Não. O amarelo `#FAC419` permanece. |
+| Favicon do iframe | Não. |
+| Strings traduzidas (botões, labels internos) | Não. |
+| Sidebar mais reduzido / esconder itens de nav | Não. |
+
+O design do produto interno é o mesmo para todos os parceiros — o brand é só
+o "rótulo de cabeçalho" que substitui o nome.
+
+## Roadmap
+
+<Card title="Próximas customizações" icon="rocket">
+  - Logo (upload PNG/SVG, hospedado no nosso R2)
+  - Cor primária por parceiro
+  - Self-service via dashboard (`/partner/dashboard`)
+  - Esconder/mostrar itens de nav (ex: parceiro que só usa Overview)
+</Card>
+
+Se algum desses bloqueia sua integração, [fale conosco](mailto:product@ativos.capital)
+— a prioridade pode subir baseado em demanda.

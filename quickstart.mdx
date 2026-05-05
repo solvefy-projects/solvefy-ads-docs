@@ -1,0 +1,150 @@
+---
+title: "Quickstart"
+description: "Embuta o SolvefyAds em 5 minutos."
+---
+
+<Steps>
+  <Step title="Crie sua conta e gere a API key">
+    Acesse **[https://solvefyads.netlify.app/partners/signup](https://solvefyads.netlify.app/partners/signup)**
+    e preencha:
+
+    - **Nome da empresa** — usado em comunicações internas
+    - **Email de contato** — receberá o link de verificação
+    - **Brand do iframe** (opcional) — como o produto deve aparecer dentro
+      do iframe (ex: "Food Ads"). Se vazio, mostramos "Solvefy Ads".
+    - **Domínios autorizados** (opcional) — onde você pretende embedar (um
+      por linha)
+
+    Você receberá um email com link de verificação válido por 24h. Ao clicar,
+    aparecerá sua **API key** (`sak_...`) — **salve imediatamente em cofre
+    de segredos**, não é mostrada novamente.
+
+    <Tip>
+      Para testes locais, **antes** de criar sua conta, pegue inclusão de
+      `http://localhost:8080` na allowlist `frame-ancestors` do ambiente de
+      desenvolvimento — fale com [product@ativos.capital](mailto:product@ativos.capital).
+    </Tip>
+
+    URLs que você vai usar:
+    - **Backend**: `https://solvefy-ads-backend.onrender.com` (chamadas server-to-server)
+    - **Frontend**: `https://solvefyads.netlify.app` (URL base do iframe)
+  </Step>
+
+  <Step title="No seu backend, peça um embed token">
+    Faça uma chamada server-to-server passando o id do usuário no seu sistema.
+
+    <CodeGroup>
+
+    ```bash curl
+    curl -X POST "$SOLVEFY_API/v1/embed/token" \
+      -H "Content-Type: application/json" \
+      -H "X-Partner-Api-Key: $SOLVEFY_API_KEY" \
+      -d '{
+        "externalUserId": "user-12345",
+        "email": "joao@meucliente.com",
+        "name": "João Silva"
+      }'
+    ```
+
+    ```js Node.js
+    async function issueEmbedToken({ externalUserId, email, name }) {
+      const res = await fetch(`${process.env.SOLVEFY_API}/v1/embed/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Partner-Api-Key': process.env.SOLVEFY_API_KEY,
+        },
+        body: JSON.stringify({ externalUserId, email, name }),
+      });
+      if (!res.ok) throw new Error(`embed/token failed: ${res.status}`);
+      return res.json(); // { embedToken, expiresAt }
+    }
+    ```
+
+    ```python Python
+    import os, requests
+
+    def issue_embed_token(external_user_id, email, name=None):
+        r = requests.post(
+            f"{os.environ['SOLVEFY_API']}/v1/embed/token",
+            headers={
+                "Content-Type": "application/json",
+                "X-Partner-Api-Key": os.environ["SOLVEFY_API_KEY"],
+            },
+            json={"externalUserId": external_user_id, "email": email, "name": name},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return r.json()  # { embedToken, expiresAt }
+    ```
+
+    </CodeGroup>
+
+    A resposta vem assim:
+
+    ```json
+    {
+      "embedToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....",
+      "expiresAt": "2026-05-05T15:34:54.742Z"
+    }
+    ```
+
+    <Warning>
+      O token tem TTL de **2 minutos**. Gere-o **na hora** que o iframe
+      vai renderizar — não cacheie.
+    </Warning>
+  </Step>
+
+  <Step title="No seu frontend, renderize o iframe">
+    Coloque o token na URL do iframe e acrescente `embed=1` para ativar o
+    modo white-label (esconde branding Solvefy explícito).
+
+    ```html
+    <iframe
+      src="https://solvefyads.netlify.app/embed/sso?embedToken=<EMBED_TOKEN>&embed=1"
+      style="width:100%; height:800px; border:0"
+      allow="clipboard-write"
+    ></iframe>
+    ```
+
+    Pronto. O iframe troca o token por uma sessão real e redireciona pra
+    `/overview?embed=1` autenticado.
+  </Step>
+
+  <Step title="Padrão recomendado: endpoint do parceiro">
+    Em vez de gerar o token e passar no HTML, exponha um endpoint próprio que
+    devolve a URL pronta. Assim a API key nunca toca o browser.
+
+    ```js Backend (Express/Nest/etc)
+    app.get('/api/solvefy-embed-url', requireAuth, async (req, res) => {
+      const { embedToken } = await issueEmbedToken({
+        externalUserId: req.user.id,
+        email: req.user.email,
+        name: req.user.name,
+      });
+      const url = `${SOLVEFY_FRONTEND}/embed/sso?embedToken=${encodeURIComponent(embedToken)}&embed=1`;
+      res.json({ url });
+    });
+    ```
+
+    ```html Frontend
+    <iframe id="solvefy-ads" style="width:100%; height:800px; border:0"></iframe>
+    <script>
+      fetch('/api/solvefy-embed-url')
+        .then(r => r.json())
+        .then(({ url }) => { document.getElementById('solvefy-ads').src = url; });
+    </script>
+    ```
+  </Step>
+</Steps>
+
+## E agora?
+
+<CardGroup cols={2}>
+  <Card title="Guia detalhado" icon="map" href="/integration/overview">
+    Auto-provisioning, troca de token, endpoint do parceiro, exemplo completo.
+  </Card>
+  <Card title="Segurança" icon="shield" href="/security">
+    Como proteger a API key, rate limits, mitigações.
+  </Card>
+</CardGroup>

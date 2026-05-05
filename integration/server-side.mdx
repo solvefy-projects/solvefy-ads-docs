@@ -1,0 +1,169 @@
+---
+title: "Backend (server-side)"
+description: "Como o seu backend pede um embed token ao Solvefy."
+---
+
+## A chamada
+
+```http
+POST /v1/embed/token HTTP/1.1
+Host: solvefy-ads-backend.onrender.com
+Content-Type: application/json
+X-Partner-Api-Key: sak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+{
+  "externalUserId": "user-12345",
+  "email": "joao@meucliente.com",
+  "name": "João Silva"
+}
+```
+
+## Body
+
+<ParamField path="externalUserId" type="string" required>
+  Identificador estável do usuário no **seu** sistema. **Use sempre o mesmo
+  valor para o mesmo usuário** — chamadas repetidas com o mesmo id reusam o
+  mesmo User do Solvefy via auto-provisioning.
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Email do usuário. Aparece no sidebar do produto e em comunicações futuras.
+</ParamField>
+
+<ParamField path="name" type="string">
+  Nome de exibição. Aparece no avatar do sidebar quando presente. Quando
+  ausente, usamos o local-part do email.
+</ParamField>
+
+## Resposta (200 OK)
+
+<ResponseField name="embedToken" type="string">
+  JWT assinado, **single-use**, TTL **2 minutos**. Mande direto pro browser na
+  URL do iframe.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO-8601 UTC. Apenas informativo (o servidor é a fonte da verdade).
+</ResponseField>
+
+```json
+{
+  "embedToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....",
+  "expiresAt": "2026-05-05T15:34:54.742Z"
+}
+```
+
+## Exemplos
+
+<CodeGroup>
+
+```js Node.js
+async function issueEmbedToken({ externalUserId, email, name }) {
+  const res = await fetch(`${process.env.SOLVEFY_API}/v1/embed/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Partner-Api-Key': process.env.SOLVEFY_API_KEY,
+    },
+    body: JSON.stringify({ externalUserId, email, name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`embed/token failed: ${res.status} ${err.detail ?? ''}`);
+  }
+  return res.json();
+}
+```
+
+```ts NestJS
+@Injectable()
+export class SolvefyEmbedService {
+  constructor(private readonly http: HttpService, private readonly cfg: ConfigService) {}
+
+  async issueEmbedToken(input: { externalUserId: string; email: string; name?: string }) {
+    const { data } = await firstValueFrom(
+      this.http.post(`${this.cfg.get('SOLVEFY_API')}/v1/embed/token`, input, {
+        headers: { 'X-Partner-Api-Key': this.cfg.get('SOLVEFY_API_KEY') },
+      }),
+    );
+    return data as { embedToken: string; expiresAt: string };
+  }
+}
+```
+
+```python Python
+import os
+import requests
+
+def issue_embed_token(external_user_id: str, email: str, name: str | None = None) -> dict:
+    r = requests.post(
+        f"{os.environ['SOLVEFY_API']}/v1/embed/token",
+        headers={
+            "Content-Type": "application/json",
+            "X-Partner-Api-Key": os.environ["SOLVEFY_API_KEY"],
+        },
+        json={"externalUserId": external_user_id, "email": email, "name": name},
+        timeout=10,
+    )
+    r.raise_for_status()
+    return r.json()
+```
+
+```php PHP
+<?php
+function issueEmbedToken(string $externalUserId, string $email, ?string $name = null): array {
+    $ch = curl_init(getenv('SOLVEFY_API') . '/v1/embed/token');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'X-Partner-Api-Key: ' . getenv('SOLVEFY_API_KEY'),
+        ],
+        CURLOPT_POSTFIELDS => json_encode(array_filter([
+            'externalUserId' => $externalUserId,
+            'email' => $email,
+            'name' => $name,
+        ])),
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code !== 200) throw new RuntimeException("embed/token failed: $code");
+    return json_decode($body, true);
+}
+```
+
+```bash curl
+curl -X POST "$SOLVEFY_API/v1/embed/token" \
+  -H "Content-Type: application/json" \
+  -H "X-Partner-Api-Key: $SOLVEFY_API_KEY" \
+  -d '{
+    "externalUserId": "user-12345",
+    "email": "joao@meucliente.com",
+    "name": "João Silva"
+  }'
+```
+
+</CodeGroup>
+
+## Boas práticas
+
+<Check>
+  Gere o token **na hora** que o usuário vai abrir o iframe (TTL é 2 min).
+</Check>
+
+<Check>
+  Mantenha a `X-Partner-Api-Key` em variável de ambiente do backend, **nunca**
+  no JavaScript do browser.
+</Check>
+
+<Check>
+  Logue erros do `embed/token` (você dispara essa chamada por usuário ativo) —
+  permite detectar API key vencida ou problemas de rede.
+</Check>
+
+<Warning>
+  Não cacheie tokens entre usuários ou entre sessões. Cada chamada deve
+  declarar o `externalUserId` correto do usuário ativo.
+</Warning>

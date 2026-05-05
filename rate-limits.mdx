@@ -1,0 +1,66 @@
+---
+title: "Rate limits"
+description: "Limites por endpoint e como evitar 429."
+---
+
+## Limites em vigor
+
+| Endpoint | Limite | Janela | Escopo |
+|---|---|---|---|
+| `POST /v1/embed/token` | **30 requisições** | 1 minuto | Por API key (parceiro) |
+| `POST /v1/embed/exchange` | sem limite dedicado | — | Token é single-use de 2min |
+| `POST /v1/auth/refresh` (interno do iframe) | sem limite dedicado | — | Por usuário (cada iframe renova o próprio) |
+
+## Resposta 429
+
+```json
+{
+  "type": "about:blank",
+  "title": "Too Many Requests",
+  "status": 429,
+  "detail": "Embed token rate limit exceeded for this partner",
+  "instance": "/v1/embed/token"
+}
+```
+
+## Como evitar 429
+
+### Padrão correto: 1 token por carga de iframe
+
+Cada vez que o usuário acessa a tela com o iframe → 1 chamada. Em produção
+isso é **muito** abaixo de 30/min mesmo com tráfego alto.
+
+### Anti-padrão: chamar a cada page-view do parceiro
+
+Se você tiver várias telas que mostram o iframe, **gere o token só na rota
+que efetivamente vai renderizar** — não em layout ou middleware global.
+
+### Anti-padrão: chamar em loop
+
+Se você tem um cron que renova tokens em background, **pare**. Tokens devem
+nascer junto com a sessão de uso. Não há benefício em pré-aquecimento.
+
+### Sob ataque ou pico
+
+Se você tem um cenário legítimo de mais de 30 req/min (ex: batch de SSO em
+massa), [fale conosco](mailto:product@ativos.capital) — podemos elevar o
+limite para sua API key específica.
+
+## Por que esse limite
+
+O endpoint emite credenciais. Limite baixo é uma defesa contra:
+
+- **Brute-force** de API keys vazadas
+- **Vazamento amplificado** de uma key comprometida
+- **Bugs** no integrador (ex: loop infinito chamando o endpoint)
+
+Os outros endpoints (exchange, refresh) não precisam de rate limit estrito
+porque cada um exige um token válido obtido pelo `/embed/token` — que já tem
+o teto.
+
+## Implementação atual
+
+In-memory sliding window por replica do backend Solvefy. Em deploys
+multi-replica, o limite efetivo é `30 * N réplicas` por minuto. Suficiente
+para o estágio atual. Quando escalar, migra pra Redis para limite global
+exato.

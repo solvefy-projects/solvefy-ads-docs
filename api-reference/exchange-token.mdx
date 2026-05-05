@@ -1,0 +1,94 @@
+---
+title: "POST /v1/embed/exchange"
+description: "Troca um embed token de curta duração por uma sessão real (access + refresh)."
+---
+
+<Note>
+  Endpoint **público** (não exige API key). É chamado pela página `/embed/sso`
+  do frontend Solvefy automaticamente quando o iframe carrega — você não
+  precisa chamar diretamente. Esta documentação serve apenas como referência.
+</Note>
+
+## Request
+
+```http
+POST /v1/embed/exchange HTTP/1.1
+Host: solvefy-ads-backend.onrender.com
+Content-Type: application/json
+
+{
+  "embedToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...."
+}
+```
+
+### Body
+
+<ParamField body="embedToken" type="string" required>
+  O JWT recebido do `POST /v1/embed/token`. Não modifique o token; passe
+  exatamente como recebido.
+</ParamField>
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "id": "69fa183aeba17a507e6d1c18",
+  "email": "joao@meucliente.com",
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....",
+  "brandName": "Food Ads"
+}
+```
+
+<ResponseField name="id" type="string">
+  Id Solvefy do User (ObjectId hex). Estável entre exchanges.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Email do User no Solvefy.
+</ResponseField>
+
+<ResponseField name="accessToken" type="string">
+  JWT de sessão. TTL 15 minutos. Usado em `Authorization: Bearer ...` para
+  todas as outras chamadas do produto.
+</ResponseField>
+
+<ResponseField name="refreshToken" type="string">
+  JWT de renovação. TTL 7 dias. O iframe usa automaticamente quando o access
+  token expira.
+</ResponseField>
+
+<ResponseField name="brandName" type="string | null">
+  Brand do parceiro a ser exibido no iframe. `null` se o parceiro não tem
+  brand customizado configurado (cai no padrão "Solvefy Ads").
+</ResponseField>
+
+### Erros
+
+| HTTP | `detail` | Quando |
+|---|---|---|
+| 400 | (validação Zod) | Body sem `embedToken` |
+| 401 | `Invalid or expired embed token` | Token expirou (>2min), foi adulterado, ou User não pertence mais ao Partner do token |
+
+## Validações de segurança
+
+O endpoint executa, em ordem:
+
+1. **Verificação JWT** (assinatura + `exp`)
+2. **Tipo do token**: deve ser `embed` (rejeita refresh tokens, access tokens, etc.)
+3. **User existe**: `findById` no `userId` do payload
+4. **User pertence ao Partner**: `user.partnerId === payload.partnerId`
+
+Qualquer falha → 401 com mesma mensagem genérica (não vaza detalhe ao
+atacante).
+
+## Side effects
+
+Bem-sucedido: emite um par `accessToken` + `refreshToken` normais (idênticos
+aos do fluxo de login padrão), com expirações configuradas no servidor
+(15min / 7d).
+
+Não há registro de uso do embed token (não é "burned"); o servidor confia no
+TTL apertado de 2min.

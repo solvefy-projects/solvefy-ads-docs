@@ -1,0 +1,88 @@
+---
+title: "Iframe (browser-side)"
+description: "Como o seu frontend renderiza o iframe e o que acontece dentro dele."
+---
+
+## URL do iframe
+
+```html
+<iframe
+  src="https://solvefyads.netlify.app/embed/sso?embedToken=<EMBED_TOKEN>&embed=1"
+  style="width:100%; height:800px; border:0"
+  allow="clipboard-write"
+></iframe>
+```
+
+<ParamField query="embedToken" type="string" required>
+  O JWT recebido do `POST /v1/embed/token`. Será trocado pela sessão do iframe.
+</ParamField>
+
+<ParamField query="embed" type="string" required>
+  Sempre `1`. Ativa o **modo white-label**: esconde branding Solvefy explícito
+  (logo no topo do sidebar, botão de logout, etc.) e ativa o `brandName` do
+  parceiro nos lugares relevantes.
+</ParamField>
+
+## O que acontece dentro do iframe
+
+```
+URL recebida: /embed/sso?embedToken=eyJ...&embed=1
+       │
+       ▼
+1. Página /embed/sso lê embedToken da query string
+2. Chama POST /v1/embed/exchange com o token
+3. Recebe { id, email, accessToken, refreshToken, brandName }
+4. Hidrata o estado de autenticação no localStorage
+5. Persiste embed=1 e brandName no sessionStorage
+6. router.replace('/overview?embed=1')
+       │
+       ▼
+Iframe agora mostra /overview autenticado, com brand do parceiro.
+```
+
+## Persistência da flag `embed=1`
+
+A flag é gravada em `sessionStorage` na primeira carga, então **toda navegação
+interna** dentro do iframe (clica em Campanhas → Overview) mantém o modo
+embed sem precisar carregar a query string em cada link.
+
+`sessionStorage` morre quando o usuário fecha a aba, então a próxima sessão
+recomeça do `/embed/sso` (que reativa o modo).
+
+## Estados visíveis ao usuário
+
+| Estado | O que aparece |
+|---|---|
+| Loading | Spinner + "Autenticando…" |
+| Sucesso | Redireciona para `/overview?embed=1` |
+| Token inválido / expirado | Mensagem amigável: "Não foi possível autenticar este acesso. O link expirou ou é inválido. Por favor, solicite um novo acesso ao parceiro." |
+
+## Dimensionamento do iframe
+
+O produto interno é responsivo a partir de ~960px de largura. Se o seu
+container for menor, o sidebar pode encavalar. Recomendações:
+
+- **Largura mínima**: `min-width: 960px`
+- **Altura sugerida**: `height: 800px` (ou `vh` baseado no contexto do parceiro)
+- **Border**: zero
+- **Permissions**: `allow="clipboard-write"` se quiser que o produto consiga
+  copiar URLs de campanhas para a área de transferência
+
+```html
+<iframe
+  src="..."
+  style="width:100%; min-width:960px; height:800px; border:0"
+  allow="clipboard-write"
+></iframe>
+```
+
+## Refresh automático
+
+O iframe interceptal todos os 401 do produto e **renova silenciosamente** o
+`accessToken` usando o `refreshToken`. Você não precisa fazer nada — o usuário
+nunca vê tela de "sessão expirada" enquanto o `refreshToken` (7 d) for válido.
+
+Quando o `refreshToken` expirar, o iframe redireciona pra `/login` (que está
+na sua origem do iframe, não no site do parceiro). Para evitar isso, gere um
+novo embed token via `/embed/sso` quando você souber que a sessão é antiga
+(ex: usuário voltou ao site depois de 1 semana).

@@ -1,0 +1,169 @@
+---
+title: "Provisionar um parceiro"
+description: "Como a equipe Solvefy cria, configura e entrega credenciais para um novo parceiro."
+---
+
+<Note>
+  Esta página é para uso interno. Inclui referências a comandos e
+  configurações que não fazem sentido para parceiros.
+</Note>
+
+## Quando usar self-service vs CLI
+
+A partir da Fase 4, o caminho **padrão** é o self-service:
+[https://solvefyads.netlify.app/partners/signup](https://solvefyads.netlify.app/partners/signup).
+O parceiro preenche o form, recebe email com link de confirmação e gera a
+API key sozinho.
+
+Use o **CLI `pnpm seed:partner`** apenas para casos especiais:
+
+- **Demos internos** que não precisam de email real
+- **Smoke tests** automatizados (CI ou ambiente efêmero)
+- **Parceiros enterprise** sem email convencional ou com fluxo de
+  contratação manual
+- **Recuperação**: se a API key de um parceiro vazou e precisamos rotacionar
+  manualmente (até o dashboard de rotação ficar pronto)
+
+Para tudo mais, oriente o parceiro a usar o signup self-service.
+
+## Pré-requisitos
+
+- Acesso ao repo `innovation.node.monorepo`
+- MongoDB do ambiente alvo acessível
+- Variáveis `MONGODB_URI` / `MONGODB_NAME` configuradas no `.env` do backend
+- Node + pnpm instalados
+
+## Criar um Partner via CLI
+
+```bash
+cd apps/solvefy-ads/backend
+pnpm seed:partner "<Nome do Parceiro>" [--brand "<Brand>"]
+```
+
+### Exemplos
+
+```bash
+# Sem brand customizado (iframe mostrará "Solvefy Ads")
+pnpm seed:partner "Acme Foods"
+
+# Com brand customizado
+pnpm seed:partner "Acme Foods" --brand "Food Ads"
+```
+
+### O que acontece
+
+1. Boota um Nest application context headless (`NestFactory.createApplicationContext`).
+2. Gera uma API key aleatória `sak_<48 hex>`.
+3. Faz hash bcrypt da key e armazena `apiKeyPrefix` (8 chars públicos para
+   lookup) + `apiKeyHash` (segredo) no Mongo.
+4. Imprime a key plain **uma única vez**.
+
+### Saída esperada
+
+```
+Partner created:
+  id:    69fa18287c96dacf16439a34
+  name:  Acme Foods
+  brand: Food Ads
+
+API key (store immediately — not shown again):
+  sak_39e50bde7289a24a93cdaba342070e860c043cb01a560860
+
+Use it in the X-Partner-Api-Key header when calling POST /v1/embed/token.
+```
+
+<Warning>
+  A API key NÃO é recuperável depois de fechar o terminal. Salve no cofre
+  imediatamente. Se perder, é necessário criar um novo Partner ou atualizar
+  o hash diretamente no Mongo.
+</Warning>
+
+## Entregar ao parceiro
+
+Envie por canal seguro (1Password share, ProtonMail, etc.) — **nunca por
+Slack/Discord/Telegram em texto puro**:
+
+1. URL do backend (ex: `https://solvefy-ads-backend.onrender.com`)
+2. URL do frontend (ex: `https://solvefyads.netlify.app`)
+3. API key (`sak_...`)
+4. Confirmação de qual brand foi configurado
+5. Link para esta documentação pública
+
+Modelo de email/template:
+
+> Olá [parceiro],
+>
+> Provisionamos sua integração com SolvefyAds Embed. Suas credenciais e URLs:
+>
+> - **API key**: `sak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+> - **Backend**: `https://solvefy-ads-backend.onrender.com`
+> - **Frontend**: `https://solvefyads.netlify.app`
+> - **Brand do iframe**: "Food Ads"
+> - **Documentação completa**: (URL do Mintlify quando publicado)
+>
+> Início recomendado: comece pelo Quickstart na documentação.
+> Confirme também as origens do seu produto que devem ser autorizadas a
+> embedar (ex: `https://app.acme.com`, `https://staging.acme.com`).
+
+## Adicionar origens à allowlist
+
+A allowlist de embed (`EMBED_ALLOWED_ORIGINS`) é env var **compartilhada**
+entre todos os parceiros do ambiente. Para adicionar:
+
+1. Edite o secret `EMBED_ALLOWED_ORIGINS` do deploy do frontend
+   (formato CSV: `https://app.acme.com,https://app.beta.com`)
+2. Trigger novo deploy
+3. CSP `frame-ancestors` recalculado em build-time pelo Next.js
+
+Para isolamento por parceiro (origem do parceiro A não pode embedar dados do
+parceiro B), está no roadmap como middleware Edge com lookup dinâmico em
+`Partner.allowedOrigins` — não disponível ainda.
+
+## CORS
+
+Mesma lógica para `CORS_ALLOWED_ORIGINS` no backend — adicione as origens
+dos parceiros para que o iframe consiga chamar `/v1/embed/exchange`.
+
+## Auditoria
+
+Todas as emissões de embed token são gravadas em `partnerAuditLogs`:
+
+```js
+{
+  _id: ObjectId,
+  partnerId: string,        // ref Partner._id
+  action: "embed.token.issued",
+  externalUserId: string,   // do payload
+  userId: string,           // ref User._id (resolved/criado)
+  ip: string,               // request.ip (Fastify trustProxy honra X-Forwarded-For)
+  userAgent: string,
+  createdAt: Date,
+  updatedAt: Date,
+}
+```
+
+Útil para investigar:
+
+- Picos de tráfego suspeito
+- Disputa de uso ("o usuário X foi criado quando?")
+- Origem geográfica anômala (ip → geo)
+
+## Operações úteis (Mongo)
+
+```js
+// Listar parceiros
+db.partners.find({}, { apiKeyHash: 0 })
+
+// Auditoria por parceiro
+db.partnerAuditLogs.find({ partnerId: '<id>' }).sort({ createdAt: -1 }).limit(50)
+
+// Quantos usuários únicos por parceiro
+db.users.aggregate([
+  { $match: { partnerId: { $ne: null } } },
+  { $group: { _id: '$partnerId', users: { $sum: 1 } } },
+])
+
+// Desativar um parceiro (sem apagar histórico)
+db.partners.updateOne({ _id: '<id>' }, { $set: { isActive: false } })
+// → próximas chamadas de /v1/embed/token retornam 401
+```

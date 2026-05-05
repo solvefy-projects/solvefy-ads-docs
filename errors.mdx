@@ -1,0 +1,77 @@
+---
+title: "Códigos de erro"
+description: "Referência de respostas de erro e o que significam."
+---
+
+## Formato
+
+Todas as respostas de erro seguem [RFC 7807/9457 (Problem Details)](https://datatracker.ietf.org/doc/html/rfc9457):
+
+```json
+{
+  "type": "about:blank",
+  "title": "Unauthorized",
+  "status": 401,
+  "detail": "Invalid or missing partner API key",
+  "instance": "/v1/embed/token"
+}
+```
+
+| Campo | Descrição |
+|---|---|
+| `type` | URI categórica do erro. Hoje sempre `about:blank`. |
+| `title` | Título legível por humano. |
+| `status` | Código HTTP. |
+| `detail` | Mensagem específica do erro. **Use isto para diagnosticar.** |
+| `instance` | Path da requisição que falhou. |
+
+## Tabela de erros
+
+### `POST /v1/embed/token`
+
+| HTTP | `detail` | Causa | Ação |
+|---|---|---|---|
+| **401** | `Invalid or missing partner API key` | Header `X-Partner-Api-Key` ausente, mal formatado, ou key não bate com nenhum partner ativo | Confira variável de ambiente. Se persistir, peça reissue. |
+| **400** | (validação Zod) | Body não passou na validação (`externalUserId` vazio, `email` inválido) | Confira o payload contra [a referência](/api-reference/issue-token). |
+| **429** | `Embed token rate limit exceeded for this partner` | Excedeu 30/min na API key | Cache de token por sessão; ver [rate limits](/rate-limits). |
+| **5xx** | varia | Erro inesperado | Retry com backoff. Se persistir, abra ticket. |
+
+### `POST /v1/embed/exchange`
+
+| HTTP | `detail` | Causa | Ação |
+|---|---|---|---|
+| **401** | `Invalid or expired embed token` | Token expirou (>2min), foi adulterado, ou User não pertence mais ao Partner | Gere um novo token. Se acontece sempre, conferir relógio do servidor (NTP). |
+| **400** | (validação Zod) | Body sem `embedToken` | Veja [referência](/api-reference/exchange-token). |
+
+## Diagnóstico rápido
+
+<AccordionGroup>
+  <Accordion title="401 Invalid or missing partner API key">
+    1. A variável de ambiente `SOLVEFY_API_KEY` está populada no processo
+       que faz a chamada? Cheque `process.env.SOLVEFY_API_KEY?.length`.
+    2. O header está sendo enviado exatamente como `X-Partner-Api-Key`
+       (case-insensitive em HTTP, mas sem espaços)?
+    3. Você está chamando o ambiente certo? (key de staging em prod
+       devolve 401)
+    4. A key começa com `sak_`? Se for outra coisa, pode estar truncada.
+  </Accordion>
+  <Accordion title="401 Invalid or expired embed token">
+    1. **Gerou e usou em < 2 min?** TTL é apertado. Renderize o iframe
+       imediatamente após receber o token.
+    2. Servidor com clock muito atrasado/adiantado? JWT valida `exp` contra
+       hora local. Sincronize via NTP.
+    3. Já usou o token e tentou de novo? Trate como single-use.
+    4. URL do iframe foi modificada? Não passe o token por proxies/encurtadores
+       que possam re-encodar.
+  </Accordion>
+  <Accordion title="429 Rate limit">
+    Você está gerando tokens em loop ou em vários layouts simultâneos.
+    Centralize a geração no endpoint da rota que efetivamente vai renderizar
+    o iframe. Ver [rate limits](/rate-limits).
+  </Accordion>
+  <Accordion title="Iframe carrega em branco, console mostra CSP frame-ancestors">
+    Seu domínio não está na allowlist do frontend Solvefy. **Não é um erro de
+    API** — é o browser bloqueando. Peça inclusão da origem (escheme + host +
+    porta exatos).
+  </Accordion>
+</AccordionGroup>

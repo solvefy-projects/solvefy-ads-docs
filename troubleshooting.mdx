@@ -1,0 +1,101 @@
+---
+title: "Troubleshooting"
+description: "Sintomas comuns, causas, e como diagnosticar."
+---
+
+## Por sintoma
+
+<AccordionGroup>
+  <Accordion title="Iframe carrega em branco, sem mensagem de erro">
+    **Provável causa**: CSP `frame-ancestors` bloqueando. Abra o DevTools do
+    browser → aba Console — você verá algo como `Refused to display
+    'https://solvefyads.netlify.app/embed/sso?...' in a frame because an ancestor
+    violates the following Content Security Policy directive: "frame-ancestors
+    'self' ..."`.
+
+    **Solução**: peça à Solvefy para incluir sua origem (`https://app.acme.com`)
+    na allowlist `EMBED_ALLOWED_ORIGINS`.
+  </Accordion>
+
+  <Accordion title="Iframe mostra 'Não foi possível autenticar este acesso'">
+    **Provável causa**: embed token expirado ou inválido.
+
+    **Diagnóstico**:
+    1. Veja o tempo entre `POST /v1/embed/token` (no seu backend) e o
+       carregamento do iframe (no browser). Se passou de 2 minutos, é isso.
+    2. Reproduza com curl: gere um token, cole na URL do iframe imediatamente.
+       Funciona? Então o problema é latência.
+
+    **Solução**: gere o token só no momento que o iframe vai ser renderizado,
+    não em rotas anteriores ou em pré-aquecimento.
+  </Accordion>
+
+  <Accordion title="Sidebar mostra 'Solvefy Ads' em vez do meu brand">
+    **Provável causa**: o `brandName` do seu Partner não está cadastrado, ou foi
+    cadastrado depois do embed token ser emitido.
+
+    **Diagnóstico**:
+    1. Confira com a equipe Solvefy se seu Partner tem `brandName` definido.
+    2. Se sim, gere um **novo** embed token (o token carrega o brand no
+       payload; tokens emitidos antes do brand existir não terão o campo).
+
+    **Solução**: peça atualização do brand e renove o token.
+  </Accordion>
+
+  <Accordion title="429 esporádico">
+    **Provável causa**: pico de chamadas a `/v1/embed/token` na sua API.
+
+    **Diagnóstico**:
+    1. Quantas chamadas a `/embed/token` por minuto seu backend faz?
+    2. Tem algum cron, healthcheck, ou retry agressivo chamando esse endpoint?
+    3. Logue cada chamada com `externalUserId` para ver se um único usuário
+       está disparando muitas em sequência.
+
+    **Solução**: garantir 1 chamada por carga real do iframe. Ver [rate limits](/rate-limits).
+  </Accordion>
+
+  <Accordion title="Usuário sai e volta, e perdeu o estado">
+    **Provável causa esperada**: cada nova carga do `/embed/sso` cria/restaura
+    a sessão no `localStorage` do iframe. Sessão sobrevive a recargas, mas:
+
+    - Se o browser do usuário **bloqueia storage de terceiros** (Safari ITP
+      muito agressivo, modo private), o `localStorage` pode ser efêmero.
+    - Se o usuário **limpou o storage** manualmente, sessão perdida.
+    - **Storage Partitioning** modernos isolam por par (parceiro, Solvefy);
+      se o usuário acessa via dois parceiros diferentes, são duas sessões.
+
+    **Solução**: nada a fazer no código — comportamento de browser. Para o
+    fluxo embed isso é OK porque cada visita gera um novo token.
+  </Accordion>
+
+  <Accordion title="Iframe carrega mas sidebar/conteúdo aparecem cortados">
+    **Provável causa**: container do iframe muito estreito (< 960px).
+
+    **Solução**: defina `min-width: 960px` no iframe ou no container pai.
+  </Accordion>
+
+  <Accordion title="Console do iframe mostra erros 401 e o usuário 'cai' do produto">
+    **Provável causa**: `refreshToken` (7 dias) expirou. O iframe interceptal
+    401, tenta refresh, falha, e redireciona pra `/login`.
+
+    **Solução**: detecte o redirect (via `postMessage` futuramente, ou
+    polling do `iframe.contentWindow.location.pathname` com
+    `same-origin-policy` permitindo) e dispare um novo `embed-url` chamando
+    seu backend.
+  </Accordion>
+</AccordionGroup>
+
+## Como abrir um chamado eficiente
+
+Quando precisar de ajuda da equipe Solvefy, mande:
+
+1. **O que esperava** vs **o que aconteceu**
+2. **Qual ambiente** (staging/prod)
+3. **Timestamp UTC** da requisição que falhou
+4. **`externalUserId`** envolvido
+5. **Resposta completa** do endpoint (status + body Problem Details)
+6. **Sua API key** (não inteira — só os primeiros 8 caracteres `sak_xxxx`,
+   suficiente pra identificar o Partner)
+7. Se for visual: **screenshot** + **conteúdo do console do browser**
+
+Email: [product@ativos.capital](mailto:product@ativos.capital)

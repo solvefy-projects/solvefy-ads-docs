@@ -1,0 +1,133 @@
+---
+title: "Exemplo end-to-end"
+description: "Backend + frontend completos, prontos pra adaptar."
+---
+
+Este exemplo mostra um produto fictício "Acme Foods" embutindo o SolvefyAds
+sob o brand "Food Ads". O usuário do Acme já está autenticado no Acme; ao
+acessar `/marketing`, ele vê o produto SolvefyAds embutido sem precisar fazer
+um segundo login.
+
+## Backend (Node.js + Express)
+
+```js api/server.js
+import express from 'express';
+import { requireAuth } from './middleware/auth.js';
+
+const app = express();
+
+const SOLVEFY_API = process.env.SOLVEFY_API;          // https://solvefy-ads-backend.onrender.com
+const SOLVEFY_FRONTEND = process.env.SOLVEFY_FRONTEND; // https://solvefyads.netlify.app
+const SOLVEFY_API_KEY = process.env.SOLVEFY_API_KEY;   // sak_... (cofre de segredos)
+
+async function issueEmbedToken({ externalUserId, email, name }) {
+  const res = await fetch(`${SOLVEFY_API}/v1/embed/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Partner-Api-Key': SOLVEFY_API_KEY,
+    },
+    body: JSON.stringify({ externalUserId, email, name }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`embed/token failed: ${res.status} ${err.detail ?? ''}`);
+  }
+  return res.json();
+}
+
+// Endpoint que o seu próprio frontend chama
+app.get('/api/marketing/embed-url', requireAuth, async (req, res) => {
+  try {
+    const { embedToken } = await issueEmbedToken({
+      externalUserId: req.user.id,
+      email: req.user.email,
+      name: req.user.name,
+    });
+    const url = `${SOLVEFY_FRONTEND}/embed/sso?embedToken=${encodeURIComponent(embedToken)}&embed=1`;
+    res.json({ url });
+  } catch (err) {
+    console.error('failed to issue embed token', err);
+    res.status(502).json({ error: 'unable to load marketing module' });
+  }
+});
+
+app.listen(8080);
+```
+
+## Frontend (React)
+
+```jsx pages/marketing.jsx
+import { useEffect, useState } from 'react';
+
+export default function MarketingPage() {
+  const [iframeUrl, setIframeUrl] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/marketing/embed-url')
+      .then(r => {
+        if (!r.ok) throw new Error('failed to get embed url');
+        return r.json();
+      })
+      .then(({ url }) => setIframeUrl(url))
+      .catch(setError);
+  }, []);
+
+  if (error) {
+    return <div className="error">Não foi possível carregar o módulo de marketing.</div>;
+  }
+  if (!iframeUrl) {
+    return <div className="loading">Carregando…</div>;
+  }
+
+  return (
+    <div className="marketing-page">
+      <h1>Marketing</h1>
+      <iframe
+        src={iframeUrl}
+        title="Food Ads"
+        style={{
+          width: '100%',
+          minWidth: '960px',
+          height: '800px',
+          border: 0,
+        }}
+        allow="clipboard-write"
+      />
+    </div>
+  );
+}
+```
+
+## Fluxo do ponto de vista do usuário
+
+<Steps>
+  <Step title="Usuário entra na área de marketing do Acme">
+    Acessa `https://app.acme-foods.com/marketing`.
+  </Step>
+  <Step title="Browser pede a URL do iframe">
+    `GET /api/marketing/embed-url` (cookies de sessão do Acme aplicados).
+  </Step>
+  <Step title="Backend Acme valida a sessão e pede token">
+    Backend usa middleware `requireAuth`, depois chama
+    `POST /v1/embed/token` no Solvefy com `externalUserId = req.user.id`.
+  </Step>
+  <Step title="Browser carrega o iframe">
+    Recebe a URL e injeta no `<iframe>`. Iframe vai pra `/embed/sso`, faz
+    exchange, redireciona pra `/overview?embed=1`.
+  </Step>
+  <Step title="Usuário usa o produto">
+    Vê o brand "Food Ads" no sidebar e título da página. Navega entre
+    Overview/Campanhas dentro do iframe sem nunca sair do site do Acme.
+  </Step>
+</Steps>
+
+## Checklist antes de produção
+
+<Check>Variável `SOLVEFY_API_KEY` está em cofre de segredos, não em git nem .env commitado.</Check>
+<Check>Endpoint `/api/marketing/embed-url` exige autenticação do parceiro (`requireAuth`).</Check>
+<Check>Origem de produção (`https://app.acme-foods.com`) está na allowlist da Solvefy.</Check>
+<Check>O `externalUserId` que você manda é estável (não muda entre sessões do mesmo usuário).</Check>
+<Check>HTTPS em todos os endpoints (Solvefy backend, Solvefy frontend, seu site).</Check>
+<Check>Tratamento de erro no `/api/marketing/embed-url` (502 ou retry vs falha total da página).</Check>

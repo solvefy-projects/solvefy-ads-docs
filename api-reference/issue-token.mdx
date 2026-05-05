@@ -1,0 +1,123 @@
+---
+title: "POST /v1/embed/token"
+description: "Emite um embed token de curta duração para um usuário do parceiro."
+---
+
+<Note>
+  Server-to-server. **Nunca** chame este endpoint a partir do navegador — a
+  API key não pode tocar o frontend.
+</Note>
+
+## Request
+
+```http
+POST /v1/embed/token HTTP/1.1
+Host: solvefy-ads-backend.onrender.com
+Content-Type: application/json
+X-Partner-Api-Key: sak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+{
+  "externalUserId": "user-12345",
+  "email": "joao@meucliente.com",
+  "name": "João Silva"
+}
+```
+
+### Headers
+
+<ParamField header="X-Partner-Api-Key" type="string" required>
+  Sua API key de parceiro (formato `sak_...`). Entregue pela equipe Solvefy
+  no momento do provisionamento.
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  `application/json`
+</ParamField>
+
+### Body
+
+<ParamField body="externalUserId" type="string" required>
+  Identificador estável do usuário no **seu** sistema. Determina qual User
+  Solvefy é resolvido (ou criado, na primeira vez) via auto-provisioning.
+  Use sempre o mesmo valor para o mesmo usuário.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Email do usuário. Usado no avatar do sidebar e em registros internos.
+  Formato de email válido (validação Zod `.email()`).
+</ParamField>
+
+<ParamField body="name" type="string">
+  Nome de exibição. Quando ausente, o sidebar usa o local-part do email.
+</ParamField>
+
+## Response
+
+### 200 OK
+
+```json
+{
+  "embedToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....",
+  "expiresAt": "2026-05-05T15:34:54.742Z"
+}
+```
+
+<ResponseField name="embedToken" type="string">
+  JWT assinado pela Solvefy. TTL **2 minutos**. Coloque na URL do iframe:
+  `https://<frontend>/embed/sso?embedToken=<jwt>&embed=1`.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO-8601 UTC. Apenas informativo.
+</ResponseField>
+
+### Erros
+
+| HTTP | `detail` | Quando |
+|---|---|---|
+| 400 | (validação Zod) | Body inválido |
+| 401 | `Invalid or missing partner API key` | Header ausente, formato errado, key não existe ou está inativa |
+| 429 | `Embed token rate limit exceeded for this partner` | Mais de 30 req/min na sua API key |
+
+Ver [todos os erros](/errors) e [troubleshooting](/troubleshooting).
+
+## Side effects
+
+Cada chamada bem-sucedida:
+
+1. Faz **upsert** do User pelo par `(partnerId, externalUserId)` — cria se
+   não existir.
+2. Grava uma entrada em `partnerAuditLogs` com `partnerId`, `userId`,
+   `externalUserId`, IP, User-Agent, timestamp.
+3. Conta para o rate limit do Partner.
+
+A criação do User é idempotente (mesmo `externalUserId` = mesmo User).
+
+## Exemplo
+
+<CodeGroup>
+
+```bash curl
+curl -X POST "$SOLVEFY_API/v1/embed/token" \
+  -H "Content-Type: application/json" \
+  -H "X-Partner-Api-Key: $SOLVEFY_API_KEY" \
+  -d '{"externalUserId":"user-12345","email":"joao@meucliente.com","name":"João Silva"}'
+```
+
+```js Node.js
+const res = await fetch(`${SOLVEFY_API}/v1/embed/token`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Partner-Api-Key': SOLVEFY_API_KEY,
+  },
+  body: JSON.stringify({
+    externalUserId: 'user-12345',
+    email: 'joao@meucliente.com',
+    name: 'João Silva',
+  }),
+});
+const { embedToken, expiresAt } = await res.json();
+```
+
+</CodeGroup>

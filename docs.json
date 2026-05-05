@@ -1,0 +1,98 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "SolvefyAds Embed",
+  "colors": {
+    "primary": "#FAC419",
+    "light": "#FAC419",
+    "dark": "#CA8504"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "anchors": [
+      {
+        "anchor": "Documentation",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Comece aqui",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guia de integração",
+            "pages": [
+              "integration/overview",
+              "integration/server-side",
+              "integration/iframe",
+              "integration/full-example"
+            ]
+          },
+          {
+            "group": "White-label",
+            "pages": [
+              "white-label/brand"
+            ]
+          },
+          {
+            "group": "Operação",
+            "pages": [
+              "security",
+              "rate-limits",
+              "errors",
+              "troubleshooting"
+            ]
+          },
+          {
+            "group": "Referência da API",
+            "pages": [
+              "api-reference/issue-token",
+              "api-reference/exchange-token"
+            ]
+          },
+          {
+            "group": "Para a equipe Solvefy",
+            "pages": [
+              "operators/provisioning"
+            ]
+          }
+        ]
+      },
+      {
+        "anchor": "Suporte",
+        "href": "mailto:product@ativos.capital",
+        "icon": "envelope"
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "background": {
+    "color": {
+      "light": "#FFFFFF",
+      "dark": "#0B0B0F"
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Site Solvefy",
+        "href": "https://solvefy.com"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Solicitar API Key",
+      "href": "mailto:product@ativos.capital?subject=Solicitação%20de%20API%20Key%20-%20Embed%20SolvefyAds"
+    }
+  },
+  "footer": {
+    "socials": {
+      "website": "https://solvefy.com"
+    }
+  }
+}

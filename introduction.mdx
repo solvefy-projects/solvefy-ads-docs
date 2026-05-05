@@ -1,0 +1,82 @@
+---
+title: "Introdução"
+description: "Embuta o SolvefyAds dentro do site do seu produto, white-label, sem exigir que o usuário final passe por uma tela de login Solvefy."
+---
+
+O **SolvefyAds Embed** permite que parceiros embutam o produto Solvefy Ads
+inteiro dentro do próprio site, via `<iframe>`. O usuário final do parceiro
+usa o produto sem nunca sair da experiência do parceiro e sem fazer login no
+Solvefy — quem autentica é o backend do parceiro, e o Solvefy confia nessa
+afirmação através de uma API key.
+
+<CardGroup cols={2}>
+  <Card title="White-label" icon="palette">
+    Cada parceiro tem um `brandName`. O sidebar, header de páginas e título da
+    aba do browser mostram o brand do parceiro em vez de "Solvefy Ads".
+  </Card>
+  <Card title="Auto-provisioning" icon="user-plus">
+    Na primeira chamada com um `externalUserId` novo, o Solvefy cria o usuário
+    automaticamente. Sem fluxo de cadastro paralelo.
+  </Card>
+  <Card title="Sem login no iframe" icon="key">
+    O usuário entra logado direto. Quem autentica é o backend do parceiro, que
+    pede um embed token curto antes de renderizar o iframe.
+  </Card>
+  <Card title="Refresh automático" icon="rotate">
+    O `accessToken` (15 min) é renovado pelo iframe via o `refreshToken` (7 d)
+    sem ação do usuário.
+  </Card>
+</CardGroup>
+
+## Como funciona
+
+```
+   Site do parceiro             Backend Solvefy           Frontend Solvefy
+   ─────────────────            ───────────────           ────────────────
+   1. usuário pede acesso
+        │
+        ▼
+   2. backend do parceiro ─►    POST /v1/embed/token
+      X-Partner-Api-Key         (TTL 2 min)
+      + externalUserId          ──► { embedToken, expiresAt }
+        │
+        ▼
+   3. browser carrega iframe ──────────────────────►   /embed/sso?embedToken=...&embed=1
+                                                            │
+                                                            ▼
+                                                       4. iframe troca o token
+                                                          POST /v1/embed/exchange
+                                                          ◄── { accessToken, refreshToken,
+                                                                brandName }
+   5. iframe renderiza /overview?embed=1 (já autenticado, modo white-label)
+```
+
+## Quando usar
+
+Use o embed quando:
+
+- Seu produto **agrega** o SolvefyAds como funcionalidade — o usuário final
+  enxerga "uma feature do seu produto", não "duas plataformas".
+- Você já tem **autenticação própria** e quer evitar duplicar contas.
+- Você quer **white-label visual** (brand do iframe igual ao seu produto).
+
+Não use o embed se:
+
+- O usuário pode acessar o Solvefy diretamente em `solvefy.com` — nesse caso
+  basta um link.
+- Você precisa **embutir só uma tela específica** (ex: só o overview, sem
+  navegação interna). O embed atual carrega o produto inteiro com sidebar.
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Criar conta (self-service)" icon="user-plus" href="https://solvefyads.netlify.app/partners/signup">
+    Cadastre sua empresa e receba a API key na hora.
+  </Card>
+  <Card title="Quickstart (5 min)" icon="rocket" href="/quickstart">
+    Coloque o iframe rodando localmente em poucos minutos.
+  </Card>
+  <Card title="Guia completo" icon="book" href="/integration/overview">
+    Padrões recomendados, exemplos em Node.js, segurança.
+  </Card>
+</CardGroup>

@@ -1,0 +1,102 @@
+---
+title: "Segurança"
+description: "Modelo de ameaças e mitigações da integração via embed."
+---
+
+## API key (`X-Partner-Api-Key`)
+
+A API key é o que prova que **uma chamada veio do seu backend**, não de um
+atacante. Ela é equivalente a uma senha de sistema — proteja como tal.
+
+<AccordionGroup>
+  <Accordion title="Onde mora">
+    Variável de ambiente do **seu backend**, idealmente em cofre de segredos
+    (AWS Secrets Manager, GCP Secret Manager, Doppler, 1Password Secrets,
+    Hashicorp Vault, etc.). Nunca no código. Nunca em arquivo `.env`
+    commitado. Nunca em repos públicos. Nunca no JavaScript do browser.
+  </Accordion>
+  <Accordion title="O que ela permite fazer">
+    Apenas emitir embed tokens. Não dá acesso a campanhas, dados de outros
+    parceiros, ou ações administrativas. O escopo é mínimo.
+  </Accordion>
+  <Accordion title="Se vazar, o que faço">
+    1. Notifique a equipe Solvefy imediatamente — `product@ativos.capital`.
+    2. Vamos invalidar a key e gerar uma nova.
+    3. Investigue de onde vazou (logs, repos, dumps de DB) e remedie.
+    4. Atualize o cofre de segredos com a nova key.
+  </Accordion>
+</AccordionGroup>
+
+## Embed token
+
+O embed token é um JWT assinado pela Solvefy. Características:
+
+- **Curta vida**: 2 minutos. Mesmo se interceptado em trânsito, expira rápido.
+- **Single-use de fato**: o `/exchange` aceita o mesmo token várias vezes
+  enquanto for válido (não há registro de uso), então **trate como single-use
+  no design** — gere um novo a cada render do iframe.
+- **Vinculado a partner+user**: o JWT carrega `partnerId`, `userId` e
+  `brandName`. O `/exchange` verifica que o User ainda pertence ao Partner
+  antes de emitir a sessão.
+- **Não contém dados sensíveis**: só `userId`, `email`, `partnerId`,
+  `brandName`. Senha nunca.
+
+## Origens autorizadas (`frame-ancestors`)
+
+O frontend Solvefy responde com header `Content-Security-Policy:
+frame-ancestors 'self' <suas-origens>`. Origens fora dessa lista são
+**bloqueadas pelo browser** ao tentar embedar o iframe.
+
+```http
+Content-Security-Policy: frame-ancestors 'self' https://app.acme-foods.com
+```
+
+A allowlist é gerenciada pela equipe Solvefy via env var no deploy. Para
+adicionar/remover origens, abra um chamado.
+
+<Warning>
+  A allowlist é compartilhada entre todos os parceiros do ambiente. Se quiser
+  isolamento por parceiro (origem do parceiro A não pode embedar o iframe que
+  serve dados do parceiro B), avise — está no roadmap como middleware Edge
+  com lookup dinâmico.
+</Warning>
+
+## CORS
+
+O backend Solvefy aceita CORS apenas de origens listadas em
+`CORS_ALLOWED_ORIGINS` (env var). Inclui o frontend Solvefy próprio + origens
+de parceiros. Origens fora disso recebem rejeição CORS no preflight.
+
+A chamada `POST /v1/embed/token` (server-to-server do seu backend) **não está
+sujeita a CORS** porque não é browser. Apenas o `/exchange` (chamado pelo
+iframe) usa CORS.
+
+## Modelo de ameaças
+
+| Risco | Probabilidade | Mitigação |
+|---|---|---|
+| API key vazada no frontend | Alta se desenvolvedor erra | Documentação clara + endpoint do parceiro como padrão |
+| Token reusado por terceiro que viu a URL | Média (tela de logs, history) | TTL 2min + verificação partner-user no `/exchange` |
+| Site malicioso embeda o iframe pra phishing | Baixa | CSP `frame-ancestors` (browser bloqueia) |
+| Brute-force na API key | Baixa | Rate limit 30/min por key + bcrypt |
+| MITM em trânsito | Baixa em prod (HTTPS) | HTTPS obrigatório em produção |
+| Cross-tenant: parceiro A vê dados do B | Muito baixa | Token amarrado a `partnerId`; User checked contra `payload.partnerId` no exchange |
+| Token roubado do localStorage do iframe | Baixa | Token de acesso vive 15min; refresh 7d. Em iframe terceiro, browser pode partitionar storage. |
+| Replay de embed token expirado | Eliminado | JWT com `exp` validado no exchange |
+
+## Cookies, localStorage e iframes
+
+O iframe Solvefy usa `localStorage` (não cookies) para guardar tokens.
+`localStorage` de iframe é **isolado por origem** — o site do parceiro não
+consegue ler nada do storage do Solvefy, e vice-versa.
+
+Em browsers com **Storage Partitioning** ativado (Safari, Firefox, Chrome
+desde 2024), o localStorage do iframe Solvefy fica isolado **por par
+(parceiro, Solvefy)**, ou seja:
+
+- Usuário visita parceiro A → iframe Solvefy carrega com storage X
+- Usuário visita parceiro B → iframe Solvefy carrega com storage Y (diferente)
+
+Isso é uma proteção de privacidade do browser, não algo que controlamos. O
+efeito é: a sessão do iframe **não compartilha entre parceiros**, o que
+geralmente é o que você quer.
