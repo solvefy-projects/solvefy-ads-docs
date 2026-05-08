@@ -55,6 +55,14 @@ app.get('/api/marketing/embed-url', requireAuth, async (req, res) => {
 app.listen(8080);
 ```
 
+Para abrir o iframe direto em **Campanhas** em vez do Overview, anexe
+`&page=campaigns` à URL devolvida (o parâmetro é opcional — sem ele cai no
+default `overview`):
+
+```js
+const url = `${SOLVEFY_FRONTEND}/embed/sso?embedToken=${encodeURIComponent(embedToken)}&embed=1&page=campaigns`;
+```
+
 ## Frontend (React)
 
 ```jsx pages/marketing.jsx
@@ -115,11 +123,13 @@ export default function MarketingPage() {
   </Step>
   <Step title="Browser carrega o iframe">
     Recebe a URL e injeta no `<iframe>`. Iframe vai pra `/embed/sso`, faz
-    exchange, redireciona pra `/overview?embed=1`.
+    exchange e redireciona pra `/overview?embed=1` (ou para a tela definida
+    em `page`, ex: `/campaigns?embed=1`).
   </Step>
   <Step title="Usuário usa o produto">
-    Vê o brand "Food Ads" no sidebar e título da página. Navega entre
-    Overview/Campanhas dentro do iframe sem nunca sair do site do Acme.
+    Vê o brand "Food Ads" no título da aba e nos elementos do produto.
+    Navega entre Overview e Campanhas dentro do iframe sem nunca sair do
+    site do Acme.
   </Step>
 </Steps>
 

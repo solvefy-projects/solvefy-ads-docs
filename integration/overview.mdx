@@ -50,13 +50,13 @@ Implicações:
 Ao abrir o iframe pela primeira vez:
 
 1. Tela de loading rápida ("Autenticando…")
-2. Redireciona pra `/overview?embed=1`
-3. Sidebar com brand do parceiro + nav (Overview, Campanhas)
-4. Conteúdo do produto
+2. Redireciona pra `/overview?embed=1` (ou para a tela escolhida no
+   parâmetro `page` — ver [Iframe (browser-side)](/integration/iframe))
+3. Conteúdo do produto, com brand do parceiro no título da aba
 
-Em navegações internas (clica em Campanhas dentro do iframe), o modo embed é
-preservado via `sessionStorage` — não some se o usuário clicar em links
-internos do produto.
+Em navegações internas dentro do iframe, o modo embed é preservado via
+`sessionStorage` — não some se o usuário clicar em links internos do
+produto.
 
 ## Tempo de vida dos tokens
 

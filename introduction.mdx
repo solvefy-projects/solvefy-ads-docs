@@ -11,8 +11,9 @@ afirmação através de uma API key.
 
 <CardGroup cols={2}>
   <Card title="White-label" icon="palette">
-    Cada parceiro tem um `brandName`. O sidebar, header de páginas e título da
-    aba do browser mostram o brand do parceiro em vez de "Solvefy Ads".
+    Cada parceiro tem um `brandName`. O título da aba do browser e os
+    elementos visuais do produto exibem o brand do parceiro em vez de
+    "Solvefy Ads".
   </Card>
   <Card title="Auto-provisioning" icon="user-plus">
     Na primeira chamada com um `externalUserId` novo, o Solvefy cria o usuário
@@ -42,13 +43,13 @@ afirmação através de uma API key.
         │
         ▼
    3. browser carrega iframe ──────────────────────►   /embed/sso?embedToken=...&embed=1
-                                                            │
+                                                            │           [&page=campaigns]
                                                             ▼
                                                        4. iframe troca o token
                                                           POST /v1/embed/exchange
                                                           ◄── { accessToken, refreshToken,
                                                                 brandName }
-   5. iframe renderiza /overview?embed=1 (já autenticado, modo white-label)
+   5. iframe renderiza /overview?embed=1 (ou a tela escolhida em `page`)
 ```
 
 ## Quando usar
@@ -64,8 +65,10 @@ Não use o embed se:
 
 - O usuário pode acessar o Solvefy diretamente em `solvefy.com` — nesse caso
   basta um link.
-- Você precisa **embutir só uma tela específica** (ex: só o overview, sem
-  navegação interna). O embed atual carrega o produto inteiro com sidebar.
+- Você precisa **embutir só uma tela específica e bloquear navegação para
+  outras** — o embed permite escolher a tela inicial via `page`, mas não
+  esconde a possibilidade de navegação programática para outras rotas
+  habilitadas.
 
 ## Próximos passos
 
