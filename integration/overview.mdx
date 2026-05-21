@@ -45,6 +45,13 @@ Implicações:
   embed do parceiro que o criou. Não há vazamento entre parceiros.
 </Note>
 
+<Note>
+  **Isolamento por usuário**: cada `externalUserId` distinto tem suas próprias
+  campanhas e métricas. Usuários diferentes do mesmo parceiro **não** compartilham
+  dados entre si — quem criou enxerga só o que criou. Se você quer que duas
+  pessoas vejam as mesmas campanhas, mande o mesmo `externalUserId` para ambas.
+</Note>
+
 ## O que o usuário vê
 
 Ao abrir o iframe pela primeira vez:
